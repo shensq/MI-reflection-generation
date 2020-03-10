@@ -121,7 +121,7 @@ def main():
     data_loader, test_loader, val_loader = get_data(args, split_size=split_size, tokenizer=tokenizer)
     # gpt_alex = prepare_mix_review(args, tokenizer)
     # data_loader, val_loader = get_data(args, split_size=split_size, tokenizer=tokenizer) # TODO: this is for old get_data
-    import pdb;pdb.set_trace()
+
     # ========== Prepare optimizer =============
     # the gpt2 model from library has unnamed LM head. LM head's weights are tied to input embedding
     num_train_optimization_steps = len(data_loader) * args.num_train_epochs // args.train_batch_size

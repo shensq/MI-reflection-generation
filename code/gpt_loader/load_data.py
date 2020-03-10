@@ -354,6 +354,8 @@ class GptDataset_full(Dataset):
         keyword_all = []
         for x, y, meta, aug, keyword in x_y_meta:
             meta_all.append(meta)
+            # update for the new data format
+            aug = ''.join([a[1] for a in aug])
             x_all.append([self.tokenizer.encode(text_standardize(x_i)) for x_i in x])
             y_all.append(self.tokenizer.encode(text_standardize(y)))
             aug_all.append(self.tokenizer.encode(text_standardize(aug)))
@@ -531,7 +533,7 @@ def get_data(args, tokenizer, split_size):
         gpt_data = GptDataset(x_y_meta, tokenizer, args.output_dir, num_turns=args.num_turns)
     elif not args.kbert:
         print("Using full data.")
-        pickle_handler = open('../data_processed/x_y_meta_all', 'rb') # TODO: change back to the old data.
+        pickle_handler = open('../data_processed/x_y_with_comet', 'rb') # TODO: change back to the old data.
         x_y_meta = pickle.load(pickle_handler)
         gpt_data = GptDataset_full(x_y_meta, tokenizer, args=args)
     else:
