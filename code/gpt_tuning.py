@@ -16,7 +16,7 @@ from torch.autograd import Variable
 from tqdm import tqdm, trange
 import random
 from utils import clean_text, text_standardize, construct_grouped_parameters, get_unfreezing_funcs
-from gpt_loader import GptDataset, collate_fn, GptDataset_aug, GptDataset_keyword, collate_fn_keyword, prepare_mix_review, update_mix_review, get_data
+from gpt_loader import GptDataset, collate_fn,collate_fn_keyword, prepare_mix_review, update_mix_review, get_data
 
 # OPTIONAL: if you want to have more information on what's happening, activate the logger as follows
 import logging
@@ -76,6 +76,7 @@ def parse_arguments():
     parser.add_argument('--use_disc_lr', action='store_true')
     parser.add_argument('--use_unfreezing', action='store_true')
     parser.add_argument('--num_turns', type=int, default=5)
+    parser.add_argument('--kbert', action='store_true')
     args = parser.parse_args()
     print(args)
     return args
@@ -91,11 +92,11 @@ def load_model(args):
     # ====== Load GPT2 model ========
     model_dir = '../models/' + args.model_dir
 #     model = GPT2LMHeadModel.from_pretrained(model_dir)
-    model = GPT2LMHeadModel.from_pretrained('gpt2-medium')
+    model = GPT2LMHeadModel.from_pretrained('gpt2')
     if USE_CUDA:
         model.cuda()
 #     tokenizer = GPT2Tokenizer.from_pretrained(model_dir)
-    tokenizer = GPT2Tokenizer.from_pretrained('gpt2-medium')
+    tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
     print('Model loaded.')
     return model, tokenizer
 
@@ -120,7 +121,7 @@ def main():
     data_loader, test_loader, val_loader = get_data(args, split_size=split_size, tokenizer=tokenizer)
     # gpt_alex = prepare_mix_review(args, tokenizer)
     # data_loader, val_loader = get_data(args, split_size=split_size, tokenizer=tokenizer) # TODO: this is for old get_data
-    # import pdb;pdb.set_trace()
+    import pdb;pdb.set_trace()
     # ========== Prepare optimizer =============
     # the gpt2 model from library has unnamed LM head. LM head's weights are tied to input embedding
     num_train_optimization_steps = len(data_loader) * args.num_train_epochs // args.train_batch_size
@@ -153,7 +154,6 @@ def main():
                 x, type_x, pos_x, lm_x, x_len, _ = sample
                 keyword_x = None
             input_len = x_len[0]
-
             lm_x[:, x_len[0] + 1 + args.first_K_tokens:-1] = -1
 #             loss = model(x, position_ids=pos_x, token_type_ids=type_x, labels=lm_x, key_word=keyword_x,
 #                          use_keyword=args.cross_attention)[0]
