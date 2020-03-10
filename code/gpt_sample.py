@@ -247,7 +247,7 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
 
     model, tokenizer = load_model_data(args)
-    split_size = {'train': 0.85, 'test': 0.1, 'val': 0.05}
+    split_size = {'train': 0.90, 'test': 0.05, 'val': 0.05}
     data_loader, test_loader, val_loader = get_data(args, split_size=split_size, tokenizer=tokenizer)
     # model, tokenizer, test_loader = load_model_data(args) # TODO: this is for old get_data
     # import pdb;pdb.set_trace()
