@@ -480,7 +480,7 @@ class GptDataset_KBERT(Dataset):
             soft_position_x += list(range(soft_loc, soft_loc + len(utternace_encoded) + 1))
 
             # add the aug, if it is the right place
-            if len(dq) != 0 and dq[0][0] == i:
+            while len(dq) != 0 and dq[0][0] == i:
                 comet_output = dq.popleft()[1]
                 comet_encoded = self.tokenizer.encode(text_standardize(comet_output))
                 x += [self.augment] + comet_encoded
