@@ -60,7 +60,7 @@ def parse_arguments():
                         help="The output directory where the model predictions and checkpoints will be written.")
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_train_epochs', type=int, default=1)
-    parser.add_argument('--train_batch_size', type=int, default=1)
+    parser.add_argument('--train_batch_size', type=int, default=2)
     parser.add_argument('--max_grad_norm', type=int, default=1)
     parser.add_argument('--learning_rate', type=float, default=6.25e-5)
     parser.add_argument('--warmup_proportion', type=float, default=0.1)
@@ -148,16 +148,18 @@ def main():
         for sample in tqdm(data_loader):
         # for sample in data_loader:
 #             import pdb;pdb.set_trace()
-            if args.cross_attention:
-                x, type_x, pos_x, lm_x, x_len, _, keyword_x = sample
-            else:
-                x, type_x, pos_x, lm_x, x_len, _ = sample
-                keyword_x = None
+#             if args.cross_attention:
+#                 x, type_x, pos_x, lm_x, x_len, _, keyword_x = sample
+#             else:
+#                 x, type_x, pos_x, lm_x, x_len, _ = sample
+#                 keyword_x = None
+
+            x, type_x, pos_x, lm_x, x_len, attention_mask = sample
             input_len = x_len[0]
             lm_x[:, x_len[0] + 1 + args.first_K_tokens:-1] = -1
 #             loss = model(x, position_ids=pos_x, token_type_ids=type_x, labels=lm_x, key_word=keyword_x,
 #                          use_keyword=args.cross_attention)[0]
-            loss = model(x, position_ids=pos_x, token_type_ids=type_x, labels=lm_x)[0]
+            loss = model(x, position_ids=pos_x, token_type_ids=type_x, labels=lm_x, attention_mask=attention_mask)[0]
             loss.backward()
             optimizer.step()
             scheduler.step()
