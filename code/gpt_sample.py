@@ -78,23 +78,27 @@ def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')
     return logits
 
 def sample_sequence(model, length, context, num_samples=1, temperature=1,
-                        top_k=0, top_p=0.0, device='cuda', attention_mask=None):
+                        top_k=0, top_p=0.0, device='cuda', attention_mask=None,args=None):
     context = torch.tensor(context, dtype=torch.long, device=device)
     context = context.unsqueeze(0).repeat(num_samples, 1)
     generated = context
     prev = context
     past = None
-    attention_size = attention_mask.shape[-1]
-    output_attention_mask = torch.tril(torch.ones(512, 512, dtype=attention_mask.dtype))
-    output_attention_mask = output_attention_mask.view(1,1,*output_attention_mask.shape)
-    output_attention_mask[:,:,:attention_size,:attention_size] = attention_mask
-    if torch.cuda.is_available():
-        output_attention_mask = output_attention_mask.cuda()
+    if args.kbert:
+        attention_size = attention_mask.shape[-1]
+        output_attention_mask = torch.tril(torch.ones(512, 512, dtype=attention_mask.dtype))
+        output_attention_mask = output_attention_mask.view(1,1,*output_attention_mask.shape)
+        output_attention_mask[:,:,:attention_size,:attention_size] = attention_mask
+        if torch.cuda.is_available():
+            output_attention_mask = output_attention_mask.cuda()
     with torch.no_grad():
         for i in trange(length):
 #             inputs = {'input_ids': generated, 'past': None, 'key_word': key_word, 'use_keyword':use_keyword}
             current_length = generated.shape[-1]
-            inputs = {'input_ids': generated, 'past': None, 'attention_mask':output_attention_mask[:,:,:current_length,:current_length]}
+            if args.kbert:
+                inputs = {'input_ids': generated, 'past': None, 'attention_mask':output_attention_mask[:,:,:current_length,:current_length]}
+            else:
+                inputs = {'input_ids': generated, 'past': None}
             logits, past = model(**inputs)
             next_token_logits = logits[0, -1, :] / (temperature if temperature>0 else 1.)
             filtered_logits = top_k_top_p_filtering(next_token_logits, top_k=top_k, top_p=top_p)
@@ -157,7 +161,7 @@ def run_model(args, model, tokenizer, test_loader):
                 model=model,length=decode_length,
                 context=context_tokens,
                 temperature=args.temperature, top_k=args.top_k, top_p=args.top_p,
-                device=device, attention_mask = attention_mask
+                device=device, attention_mask = attention_mask, args=args
             )           
             out = out[:, len(context_tokens):-1].tolist() # the generated result,get rid of eos
 

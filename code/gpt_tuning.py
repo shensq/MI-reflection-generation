@@ -117,7 +117,7 @@ def main():
 
     model, tokenizer = load_model(args)
     # =============== Load & process data ==============
-    split_size = {'train': 0.90, 'test': 0.05, 'val': 0.05}
+    split_size = {'train': 0.01, 'test': 0.98, 'val': 0.01}
     data_loader, test_loader, val_loader = get_data(args, split_size=split_size, tokenizer=tokenizer)
     # gpt_alex = prepare_mix_review(args, tokenizer)
     # data_loader, val_loader = get_data(args, split_size=split_size, tokenizer=tokenizer) # TODO: this is for old get_data
@@ -153,8 +153,9 @@ def main():
 #             else:
 #                 x, type_x, pos_x, lm_x, x_len, _ = sample
 #                 keyword_x = None
-
             x, type_x, pos_x, lm_x, x_len, attention_mask = sample
+            if not args.kbert:
+                attention_mask = None
             input_len = x_len[0]
             lm_x[:, x_len[0] + 1 + args.first_K_tokens:-1] = -1
 #             loss = model(x, position_ids=pos_x, token_type_ids=type_x, labels=lm_x, key_word=keyword_x,
