@@ -207,6 +207,7 @@ def collate_fn(data):
         trg_seqs = trg_seqs.cuda()
         pos_seqs = pos_seqs.cuda()
         lm_seqs = lm_seqs.cuda()
+        attention_mask = attention_mask.cuda()
     return Variable(LongTensor(src_seqs)), Variable(LongTensor(trg_seqs)), Variable(LongTensor(pos_seqs)),Variable(LongTensor(lm_seqs)), total_input_length, attention_mask
 
 def collate_fn_nli(data):
