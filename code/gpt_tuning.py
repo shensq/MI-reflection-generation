@@ -168,7 +168,7 @@ def main():
         eval_loss = evaluate(model, val_loader, use_keyword=args.cross_attention)
         print("Eval loss: {}".format(eval_loss))
         if eval_loss < min_eval_loss:  # save the model only when the loss is the smallest
-        # if True:
+        #if True:
             early_terminate_counter = 0
             min_eval_loss = eval_loss
             # ==== Save the model ====
@@ -185,7 +185,7 @@ def main():
         else:
             print("eval loss increasing!")
             early_terminate_counter += 1
-            if early_terminate_counter > 5:  # if the eval loss does not decrease for 5 epochs, terminate early.
+            if early_terminate_counter > 3:  # if the eval loss does not decrease for 5 epochs, terminate early.
                 return
 
 if __name__ == '__main__':
