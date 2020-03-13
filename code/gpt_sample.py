@@ -84,11 +84,16 @@ def sample_sequence(model, length, context, num_samples=1, temperature=1,
     generated = context
     prev = context
     past = None
+    attention_size = attention_mask.shape[-1]
+    output_attention_mask = torch.tril(torch.ones(512, 512, dtype=attention_mask.dtype))
+    output_attention_mask = output_attention_mask.view(1,1,*output_attention_mask.shape)
+    output_attention_mask[:,:,:attention_size,:attention_size] = attention_mask
+
     with torch.no_grad():
         for i in trange(length):
 #             inputs = {'input_ids': generated, 'past': None, 'key_word': key_word, 'use_keyword':use_keyword}
             current_length = generated.shape[-1]
-            inputs = {'input_ids': generated, 'past': None, 'attention_mask':attention_mask[:,:,:current_length,:current_length]}
+            inputs = {'input_ids': generated, 'past': None, 'attention_mask':output_attention_mask[:,:,:current_length,:current_length]}
             logits, past = model(**inputs)
             next_token_logits = logits[0, -1, :] / (temperature if temperature>0 else 1.)
             filtered_logits = top_k_top_p_filtering(next_token_logits, top_k=top_k, top_p=top_p)
