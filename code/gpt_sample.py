@@ -84,7 +84,7 @@ def sample_sequence(model, length, context, num_samples=1, temperature=1,
     generated = context
     prev = context
     past = None
-
+    import pdb;pdb.set_trace()
     with torch.no_grad():
         for i in trange(length):
 #             inputs = {'input_ids': generated, 'past': None, 'key_word': key_word, 'use_keyword':use_keyword}
