@@ -201,7 +201,8 @@ def collate_fn(data):
     trg_seqs, trg_lengths = merge(trg_seqs)
     pos_seqs, pos_lengths = merge(pos_seqs)
     lm_seqs, lm_lengths = merge(lm_seqs)
-    attention_mask = merge_matrix(attention_mask)
+    if type(attention_mask[0]) is not list:
+        attention_mask = merge_matrix(attention_mask)
     if USE_CUDA:
         src_seqs = src_seqs.cuda()
         trg_seqs = trg_seqs.cuda()
