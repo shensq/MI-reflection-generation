@@ -181,24 +181,33 @@ def collate_fn(data):
             end = lengths[i]
             padded_seqs[i, :end] = seq[:end]
         return padded_seqs, lengths
+    def merge_matrix(matrices):
+        max_size = max([m.shape[-1] for m in attention_mask])
+        padded_matrices = torch.zeros(len(matrices), 1,  max_size, max_size)
+        for i,m in enumerate(matrices):
+            m_size = m.shape[-1]
+            padded_matrices[i,:,:m_size,:m_size] = m
+        return padded_matrices
+
 
     # sort a list by sequence length (descending order) to use pack_padded_sequence
     data.sort(key=lambda x: len(x[0]), reverse=True)
 
     # seperate source and target sequences
-    src_seqs, trg_seqs, pos_seqs,lm_seqs,total_input_length,meta = zip(*data)
+    src_seqs, trg_seqs, pos_seqs,lm_seqs,total_input_length,attention_mask = zip(*data)
 
     # merge sequences (from tuple of 1D tensor to 2D tensor)
     src_seqs, src_lengths = merge(src_seqs)
     trg_seqs, trg_lengths = merge(trg_seqs)
     pos_seqs, pos_lengths = merge(pos_seqs)
     lm_seqs, lm_lengths = merge(lm_seqs)
+    attention_mask = merge_matrix(attention_mask)
     if USE_CUDA:
         src_seqs = src_seqs.cuda()
         trg_seqs = trg_seqs.cuda()
         pos_seqs = pos_seqs.cuda()
         lm_seqs = lm_seqs.cuda()
-    return Variable(LongTensor(src_seqs)), Variable(LongTensor(trg_seqs)), Variable(LongTensor(pos_seqs)),Variable(LongTensor(lm_seqs)), total_input_length, meta
+    return Variable(LongTensor(src_seqs)), Variable(LongTensor(trg_seqs)), Variable(LongTensor(pos_seqs)),Variable(LongTensor(lm_seqs)), total_input_length, attention_mask
 
 def collate_fn_nli(data):
     """Creates mini-batch tensors from the list of tuples (src_seq, trg_seq).
@@ -460,11 +469,15 @@ class GptDataset_KBERT(Dataset):
         soft_position_x = []
 
         dq = self.get_comet_aug_deque(self.data[index][3])  # the comet info
+
+        mask_info = []
+
         context = self.data[index][0]
         response = self.data[index][1]
 
         is_speaker1 = bool(self.args.num_turns % 2)
         soft_loc = 0  # keep tract of the location of main sentences, point to the next token to be added
+        utterance_start_loc = 0
         for i in range(10 - self.args.num_turns, 10):
             utternace_encoded = self.tokenizer.encode(text_standardize(context[i]))
 
@@ -476,6 +489,7 @@ class GptDataset_KBERT(Dataset):
                 x += [self.speaker2]
                 type_x += [self.speaker2] * (len(utternace_encoded) + 1)
             x += utternace_encoded
+            utterance_end_loc = len(x)
 
             soft_position_x += list(range(soft_loc, soft_loc + len(utternace_encoded) + 1))
 
@@ -483,13 +497,15 @@ class GptDataset_KBERT(Dataset):
             while len(dq) != 0 and dq[0][0] == i:
                 comet_output = dq.popleft()[1]
                 comet_encoded = self.tokenizer.encode(text_standardize(comet_output))
+
                 x += [self.augment] + comet_encoded
                 type_x += [self.augment] * (len(comet_encoded) + 1)
                 soft_position_x += list(range(soft_loc, soft_loc + len(comet_encoded) + 1))
-
+                mask_info.append([utterance_start_loc, utterance_end_loc, len(comet_encoded)+1])
             # update the pointer to the new seq end, add one for the delimiter token
             soft_loc += len(utternace_encoded) + 1
             is_speaker1 = not is_speaker1
+            utterance_start_loc = len(x)
 
         lm_x += [-100] * len(x)  # all position for the input is masked for loss calculation
         total_input_length = len(x)
@@ -508,7 +524,13 @@ class GptDataset_KBERT(Dataset):
         lm_x = torch.Tensor(lm_x)
         x_len = x.shape[0]
 
-        return x, type_x, soft_position_x, lm_x, total_input_length, self.data[index][2]
+        # process the mask
+        attention_mask = torch.tril(torch.ones(x_len, x_len))
+        for u_start, u_end, branch_len in mask_info:
+            attention_mask[u_end+branch_len+1: u_end+1:u_end+branch_len+1] = 0 # [1st token after branch: , 1st token in branch: last token in branch+1]
+        attention_mask = attention_mask.view(1, x_len, x_len)
+
+        return x, type_x, soft_position_x, lm_x, total_input_length, attention_mask
 
     def __len__(self):
         return len(self.data)
