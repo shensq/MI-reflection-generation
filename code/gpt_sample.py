@@ -134,11 +134,12 @@ def run_model(args, model, tokenizer, test_loader):
     f_ref = open('../result/reference_'+args.output_dir+'.txt','w')
     
     for i,sample in enumerate(test_loader):
-        if args.cross_attention:
-            x, type_x, pos_x, lm_x, x_len, meta, keyword_x = sample
-        else:
-            x, type_x, pos_x, lm_x, x_len, meta = sample
-            keyword_x = None
+        # if args.cross_attention:
+        #     x, type_x, pos_x, lm_x, x_len, meta, keyword_x = sample
+        # else:
+        #     x, type_x, pos_x, lm_x, x_len, meta = sample
+        #     keyword_x = None
+        x, type_x, pos_x, lm_x, x_len, attention_mask = sample
         input_len = x_len[0] # The number of tokens of the context utterances
         context_tokens = x[0][:input_len+1] # at evaluation stage, the input is without the ground truth
 
