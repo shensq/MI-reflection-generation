@@ -19,9 +19,9 @@ pwd
 # python gpt_tuning.py --output_dir mi_tuned_both --num_train_epochs 10 --num_turns 10 --keyword --augment
 # python gpt_sample.py --model_dir mi_tuned_both --output_dir mi_tuned_both --num_turns 10 --keyword --augment --top_p 0.95
 
-mkdir -p ../models/mi_tuned_kbert
-python gpt_tuning.py --output_dir mi_tuned_kbert --num_train_epochs 10 --num_turns 5 --kbert
-#python gpt_sample.py --model_dir mi_tuned_5turn --output_dir mi_tuned_5turn --num_turns 5 --top_p 0.95
+mkdir -p ../models/mi_tuned_kbert_mask
+python gpt_tuning.py --output_dir mi_tuned_kbert_mask --num_train_epochs 10 --num_turns 5 --kbert
+python gpt_sample.py --model_dir mi_tuned_kbert_mask --output_dir mi_tuned_kbert --num_turns 5 --top_p 0.95
 
 echo "Finished."
 
