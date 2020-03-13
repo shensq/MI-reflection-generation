@@ -88,7 +88,8 @@ def sample_sequence(model, length, context, num_samples=1, temperature=1,
     output_attention_mask = torch.tril(torch.ones(512, 512, dtype=attention_mask.dtype))
     output_attention_mask = output_attention_mask.view(1,1,*output_attention_mask.shape)
     output_attention_mask[:,:,:attention_size,:attention_size] = attention_mask
-
+    if torch.cuda.is_available():
+        output_attention_mask = output_attention_mask.cuda()
     with torch.no_grad():
         for i in trange(length):
 #             inputs = {'input_ids': generated, 'past': None, 'key_word': key_word, 'use_keyword':use_keyword}
