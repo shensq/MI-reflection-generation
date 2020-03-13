@@ -117,7 +117,7 @@ def main():
 
     model, tokenizer = load_model(args)
     # =============== Load & process data ==============
-    split_size = {'train': 0.01, 'test': 0.98, 'val': 0.01}
+    split_size = {'train': 0.90, 'test': 0.05, 'val': 0.05}
     data_loader, test_loader, val_loader = get_data(args, split_size=split_size, tokenizer=tokenizer)
     # gpt_alex = prepare_mix_review(args, tokenizer)
     # data_loader, val_loader = get_data(args, split_size=split_size, tokenizer=tokenizer) # TODO: this is for old get_data
