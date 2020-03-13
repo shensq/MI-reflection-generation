@@ -77,9 +77,8 @@ def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')
         logits[indices_to_remove] = filter_value
     return logits
 
-def sample_sequence(model, length, context, start_token=None, batch_size=1, modified_decoding=False,
-                        value_word_relation=None, meta=None, key_word=None, num_samples=1, temperature=1,
-                        top_k=0, top_p=0.0, device='cuda', use_keyword=None):
+def sample_sequence(model, length, context, num_samples=1, temperature=1,
+                        top_k=0, top_p=0.0, device='cuda', attention_mask=None):
     context = torch.tensor(context, dtype=torch.long, device=device)
     context = context.unsqueeze(0).repeat(num_samples, 1)
     generated = context
@@ -151,10 +150,8 @@ def run_model(args, model, tokenizer, test_loader):
             out = sample_sequence(
                 model=model,length=decode_length,
                 context=context_tokens,
-                start_token=None,
-                batch_size=args.batch_size,
-                temperature=args.temperature, top_k=args.top_k, top_p=args.top_p, modified_decoding=args.modified_decoding,
-                value_word_relation=None,device=device,meta=meta[0][0], key_word=keyword_x, use_keyword= args.cross_attention
+                temperature=args.temperature, top_k=args.top_k, top_p=args.top_p,
+                device=device, attention_mask = attention_mask
             )           
             out = out[:, len(context_tokens):-1].tolist() # the generated result,get rid of eos
 
