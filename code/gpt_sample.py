@@ -125,6 +125,11 @@ def load_model_data(args):
     if USE_CUDA:
         model.cuda()
     tokenizer = GPT2Tokenizer.from_pretrained(model_dir)
+    tokenizer.eos = 50256
+    tokenizer.speaker1 = 50257
+    tokenizer.speaker2 = 50258
+    tokenizer.augment = 50259
+    tokenizer.ref = 50260
     return model, tokenizer
 
 def run_model(args, model, tokenizer, test_loader):
@@ -242,6 +247,8 @@ if __name__ == '__main__':
     parser.add_argument('--kbert', action='store_true')
     parser.add_argument('--cross_attention', action='store_true')
     parser.add_argument('--num_turns', type=int, default=5)
+    parser.add_argument('--kbert_mask', action='store_true')
+    parser.add_argument('--kbert_position', action='store_true')
     args = parser.parse_args()
     if args.batch_size == -1:
         args.batch_size = 1

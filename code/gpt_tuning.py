@@ -77,6 +77,8 @@ def parse_arguments():
     parser.add_argument('--use_unfreezing', action='store_true')
     parser.add_argument('--num_turns', type=int, default=5)
     parser.add_argument('--kbert', action='store_true')
+    parser.add_argument('--kbert_mask', action='store_true')
+    parser.add_argument('--kbert_position', action='store_true')
     args = parser.parse_args()
     print(args)
     return args
@@ -97,6 +99,15 @@ def load_model(args):
         model.cuda()
 #     tokenizer = GPT2Tokenizer.from_pretrained(model_dir)
     tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+
+    num_added_toks = tokenizer.add_tokens(['<speaker1>', '<speaker2>', '<augment>', '<ref>'])
+    model.resize_token_embeddings(len(tokenizer))
+    tokenizer.eos = 50256
+    tokenizer.speaker1 = 50257
+    tokenizer.speaker2 = 50258
+    tokenizer.augment = 50259
+    tokenizer.ref = 50260
+
     print('Model loaded.')
     return model, tokenizer
 
@@ -174,17 +185,20 @@ def main():
         #if True:
             early_terminate_counter = 0
             min_eval_loss = eval_loss
-            # ==== Save the model ====
-            # Save a trained model, configuration and tokenizer
-            model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
-            # If we save using the predefined names, we can load using `from_pretrained`
-            output_dir = '../models/'
-            output_model_file = os.path.join(output_dir + args.output_dir, WEIGHTS_NAME)
-            output_config_file = os.path.join(output_dir + args.output_dir, CONFIG_NAME)
 
-            torch.save(model_to_save.state_dict(), output_model_file)
-            model_to_save.config.to_json_file(output_config_file)
-            tokenizer.save_vocabulary(output_dir + args.output_dir)
+            # # ==== Save the model ====
+            # # Save a trained model, configuration and tokenizer
+            # model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
+            # # If we save using the predefined names, we can load using `from_pretrained`
+            output_dir = '../models/'
+            # output_model_file = os.path.join(output_dir + args.output_dir, WEIGHTS_NAME)
+            # output_config_file = os.path.join(output_dir + args.output_dir, CONFIG_NAME)
+            #
+            # torch.save(model_to_save.state_dict(), output_model_file)
+            # model_to_save.config.to_json_file(output_config_file)
+            # tokenizer.save_vocabulary(output_dir + args.output_dir)
+            model.save_pretrained(output_dir + args.output_dir)
+            tokenizer.save_pretrained(output_dir + args.output_dir)
         else:
             print("eval loss increasing!")
             early_terminate_counter += 1

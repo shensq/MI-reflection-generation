@@ -539,15 +539,18 @@ class GptDataset_KBERT_old(Dataset):
 
 
 class GptDataset_KBERT(Dataset):
-    def __init__(self, data, tokenizer, args):
-        self.data = data
+    def __init__(self, tokenizer, args):
+        pickle_handler = open("../data_processed/data_comet_dict", 'rb')
+
+        self.data = pickle.load(pickle_handler)
         self.tokenizer = tokenizer
         self.args = args
         self.num_turns = args.num_turns
         self.ref, self.speaker1, self.speaker2 = tokenizer.ref, tokenizer.speaker1, tokenizer.speaker2
         self.eos = tokenizer.eos
         self.augment = tokenizer.augment
-
+        # self.args.kbert_mask = True
+        # self.args.kbert_position = True
         if self.args.kbert_mask:
             print("using kbert-style attention mask")
         if self.args.kbert_position:
@@ -562,10 +565,10 @@ class GptDataset_KBERT(Dataset):
         attention_mask = []
 
         # 0. unpack needed input info
-        context = data[index]['context']
-        srl_mask = data[index]['srl_mask']
-        comet_output = data[index]['comet']  # a list of dict or None
-        response = data[index]['response']
+        context = self.data[index]['context']
+        srl_mask = self.data[index]['srl_mask']
+        comet_output = self.data[index]['comet']  # a list of dict or None
+        response = self.data[index]['response']
 
         # 1. encode the response.
         response_encoded = self.tokenizer.encode(text_standardize(response))
@@ -579,7 +582,7 @@ class GptDataset_KBERT(Dataset):
         comet_encoded = []
         for i in range(len(comet_output)):
             comet_text_i = ""
-            if comet_output[i] == None:
+            if comet_output[i] is None:
                 comet_encoded.append(None)
                 continue
             for rel in comet_output[i]:
@@ -610,7 +613,7 @@ class GptDataset_KBERT(Dataset):
             last_related_token_index = len(srl_mask[i]) - 1 - srl_mask[i][::-1].index(1)
 
             # add comet output
-            if comet_encoded[i] != None:
+            if comet_encoded[i] is not None:
                 x += [self.augment] + comet_encoded[i]
                 type_x += [self.augment] * (len(comet_encoded[i]) + 1)
 
@@ -634,31 +637,37 @@ class GptDataset_KBERT(Dataset):
 
         # build attention mask
         attention_mask = torch.tril(torch.ones(len(x), len(x)))
-        aug_start = 0  # where the aug begin
-        utt_start = 0  # where the utt begin
+        if self.args.kbert_mask:
+            aug_start = 0  # where the aug begin
+            utt_start = 0  # where the utt begin
 
-        for turn in range(self.args.num_turns):
-            aug_start += len(context_encoded[turn]) + 1
-            # iter through every token in the comet output
-            if comet_encoded[turn] != None:
-                for aug_token_pos in range(aug_start, aug_start + len(comet_encoded[turn]) + 1):
-                    # set the attention related to the aug part to be all zero
-                    attention_mask[aug_token_pos, :] = torch.zeros_like(attention_mask[aug_token_pos, :])
+            for turn in range(self.args.num_turns):
+                aug_start += len(context_encoded[turn]) + 1
+                # iter through every token in the comet output
+                if comet_encoded[turn] is not None:
+                    for aug_token_pos in range(aug_start, aug_start + len(comet_encoded[turn]) + 1):
+                        # set the attention related to the aug part to be all zero
+                        attention_mask[aug_token_pos, :] = torch.zeros_like(attention_mask[aug_token_pos, :])
 
-                    attention_mask[:, aug_token_pos] = torch.zeros_like(attention_mask[:, aug_token_pos])
-                    # set attention on related token to be one
-                    for normal_token_pos in range(len(context_encoded[turn])):
-                        attention_mask[aug_token_pos, utt_start + normal_token_pos + 1] += srl_mask[turn][
-                            normal_token_pos]
-                    # set attention on previous aug tokens to be one
-                    for previrous_aug_token_poc in range(aug_start, aug_token_pos + 1):
-                        attention_mask[aug_token_pos, previrous_aug_token_poc] += 1
+                        attention_mask[:, aug_token_pos] = torch.zeros_like(attention_mask[:, aug_token_pos])
+                        # set attention on related token to be one
+                        for normal_token_pos in range(len(context_encoded[turn])):
+                            attention_mask[aug_token_pos, utt_start + normal_token_pos + 1] += srl_mask[turn][
+                                normal_token_pos]
+                        # set attention on previous aug tokens to be one
+                        for previous_aug_token_poc in range(aug_start, aug_token_pos + 1):
+                            attention_mask[aug_token_pos, previous_aug_token_poc] += 1
 
-                print(aug_start, utt_start)
-                aug_start += len(comet_encoded[turn]) + 1
-                utt_start += len(comet_encoded[turn]) + 1
-            utt_start += (len(context_encoded[turn]) + 1)
+                    aug_start += len(comet_encoded[turn]) + 1
+                    utt_start += len(comet_encoded[turn]) + 1
+                utt_start += (len(context_encoded[turn]) + 1)
 
+        x = torch.tensor(x)
+        type_x = torch.tensor(type_x)
+        if not self.args.kbert_position:
+            soft_position_x = list(range(len(x)))
+        soft_position_x = torch.tensor(soft_position_x)
+        lm_x = torch.tensor(lm_x)
         return x, type_x, soft_position_x, lm_x, total_input_length, attention_mask
 
     def __len__(self):
@@ -689,9 +698,7 @@ def get_data(args, tokenizer, split_size):
         gpt_data = GptDataset_full(x_y_meta, tokenizer, args=args)
     else:
         print("Using KBERT data")
-        pickle_handler = open("../data_processed/x_y_with_comet",'rb')
-        x_y_meta = pickle.load(pickle_handler)
-        gpt_data = GptDataset_KBERT(x_y_meta, tokenizer, args=args)
+        gpt_data = GptDataset_KBERT(tokenizer, args=args)
     print("Dataset initialized. There are {} samples.".format(len(gpt_data)))
 
     test_size = int(len(gpt_data) * split_size['test'])
