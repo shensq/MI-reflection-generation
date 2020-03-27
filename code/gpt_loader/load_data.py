@@ -440,7 +440,7 @@ class GptDataset_full(Dataset):
     def __len__(self):
         return len(self.x_encoded)
 
-class GptDataset_KBERT(Dataset):
+class GptDataset_KBERT_old(Dataset):
     def get_comet_aug_deque(self, comet_data, num_turns=5):
         clause_dq = deque()
         for comet_in, comet_out in comet_data:
@@ -531,6 +531,133 @@ class GptDataset_KBERT(Dataset):
         for u_start, u_end, branch_len in mask_info:
             attention_mask[u_end+branch_len+1: u_end+1:u_end+branch_len+1] = 0 # [1st token after branch: , 1st token in branch: last token in branch+1]
         attention_mask = attention_mask.view(1, x_len, x_len)
+
+        return x, type_x, soft_position_x, lm_x, total_input_length, attention_mask
+
+    def __len__(self):
+        return len(self.data)
+
+
+class GptDataset_KBERT(Dataset):
+    def __init__(self, data, tokenizer, args):
+        self.data = data
+        self.tokenizer = tokenizer
+        self.args = args
+        self.num_turns = args.num_turns
+        self.ref, self.speaker1, self.speaker2 = tokenizer.ref, tokenizer.speaker1, tokenizer.speaker2
+        self.eos = tokenizer.eos
+        self.augment = tokenizer.augment
+
+        if self.args.kbert_mask:
+            print("using kbert-style attention mask")
+        if self.args.kbert_position:
+            print("using kbert-style soft-postional encoding")
+
+    def __getitem__(self, index):
+        # preprare variables
+        x = []
+        type_x = []
+        lm_x = []
+        soft_position_x = []
+        attention_mask = []
+
+        # 0. unpack needed input info
+        context = data[index]['context']
+        srl_mask = data[index]['srl_mask']
+        comet_output = data[index]['comet']  # a list of dict or None
+        response = data[index]['response']
+
+        # 1. encode the response.
+        response_encoded = self.tokenizer.encode(text_standardize(response))
+
+        # 2. encode each utterance.
+        context_encoded = []
+        for i in range(10 - self.args.num_turns, 10):
+            context_encoded.append(self.tokenizer.encode(text_standardize(context[i])))
+
+        # 3. encode the comet output for each utterance.
+        comet_encoded = []
+        for i in range(len(comet_output)):
+            comet_text_i = ""
+            if comet_output[i] == None:
+                comet_encoded.append(None)
+                continue
+            for rel in comet_output[i]:
+                for candidate in comet_output[i][rel]['beams']:
+                    if candidate != 'none':
+                        comet_text_i += rel + " " + candidate + " "
+                        break
+            comet_encoded.append(self.tokenizer.encode(text_standardize(comet_text_i)))
+
+        # 4. use the encoded seq to build the input and attention mask
+        is_speaker1 = bool(self.args.num_turns % 2)
+        soft_loc = 0
+        for i in range(self.args.num_turns):
+
+            # add an utterance. update x & type_x
+            if is_speaker1:
+                x += [self.speaker1]
+                type_x += [self.speaker1] * (len(context_encoded[i]) + 1)
+            else:
+                x += [self.speaker2]
+                type_x += [self.speaker2] * (len(context_encoded[i]) + 1)
+            x += context_encoded[i]
+
+            # update pos_x
+            # concate aug part after x. but the index is from the last related token
+            soft_position_x += list(range(soft_loc, soft_loc + (len(context_encoded[i]) + 1)))
+
+            last_related_token_index = len(srl_mask[i]) - 1 - srl_mask[i][::-1].index(1)
+
+            # add comet output
+            if comet_encoded[i] != None:
+                x += [self.augment] + comet_encoded[i]
+                type_x += [self.augment] * (len(comet_encoded[i]) + 1)
+
+                # +2 for the special token and the requirement of one-number larger than the utterance
+                soft_position_x += list(range(soft_loc + 2 + last_related_token_index,
+                                              soft_loc + 2 + last_related_token_index + (len(comet_encoded[i]) + 1)))
+
+            soft_loc += (len(context_encoded[i]) + 1)
+            is_speaker1 = not is_speaker1
+
+        lm_x += [-100] * len(x)  # all position for the input is masked for loss calculation
+        total_input_length = len(x)
+
+        response_encoded = self.tokenizer.encode(text_standardize(response))
+        x += [self.ref] + response_encoded + [self.eos]
+
+        type_x += [self.ref] * (len(response_encoded) + 2)
+        lm_x += [-100] + response_encoded + [self.eos]
+
+        soft_position_x += list(range(soft_loc, soft_loc + len(response_encoded) + 2))
+
+        # build attention mask
+        attention_mask = torch.tril(torch.ones(len(x), len(x)))
+        aug_start = 0  # where the aug begin
+        utt_start = 0  # where the utt begin
+
+        for turn in range(self.args.num_turns):
+            aug_start += len(context_encoded[turn]) + 1
+            # iter through every token in the comet output
+            if comet_encoded[turn] != None:
+                for aug_token_pos in range(aug_start, aug_start + len(comet_encoded[turn]) + 1):
+                    # set the attention related to the aug part to be all zero
+                    attention_mask[aug_token_pos, :] = torch.zeros_like(attention_mask[aug_token_pos, :])
+
+                    attention_mask[:, aug_token_pos] = torch.zeros_like(attention_mask[:, aug_token_pos])
+                    # set attention on related token to be one
+                    for normal_token_pos in range(len(context_encoded[turn])):
+                        attention_mask[aug_token_pos, utt_start + normal_token_pos + 1] += srl_mask[turn][
+                            normal_token_pos]
+                    # set attention on previous aug tokens to be one
+                    for previrous_aug_token_poc in range(aug_start, aug_token_pos + 1):
+                        attention_mask[aug_token_pos, previrous_aug_token_poc] += 1
+
+                print(aug_start, utt_start)
+                aug_start += len(comet_encoded[turn]) + 1
+                utt_start += len(comet_encoded[turn]) + 1
+            utt_start += (len(context_encoded[turn]) + 1)
 
         return x, type_x, soft_position_x, lm_x, total_input_length, attention_mask
 
