@@ -885,16 +885,18 @@ def get_data(args, tokenizer, split_size):
 
     if 'train_batch_size' not in args:
         args.train_batch_size = 1
-    if args.conditional:
-        data_loader = DataLoader(dataset=gpt_train, batch_size=args.train_batch_size, shuffle=True, drop_last=True,
-                                collate_fn=collate_fn_conditional)
-        test_loader = DataLoader(dataset=gpt_test, batch_size=1, shuffle=False, drop_last=False, collate_fn=collate_fn_conditional)
-        val_loader = DataLoader(dataset=gpt_val, batch_size=1, shuffle=False, drop_last=False, collate_fn=collate_fn_conditional)
-    else:
+    if args.kbert:
+        print("using kbert collate_fn")
         data_loader = DataLoader(dataset=gpt_train, batch_size=args.train_batch_size, shuffle=True, drop_last=True,
                                 collate_fn=collate_fn)
         test_loader = DataLoader(dataset=gpt_test, batch_size=1, shuffle=False, drop_last=False, collate_fn=collate_fn)
         val_loader = DataLoader(dataset=gpt_val, batch_size=1, shuffle=False, drop_last=False, collate_fn=collate_fn)
+    else:
+        print("using normal collate_fn")
+        data_loader = DataLoader(dataset=gpt_train, batch_size=args.train_batch_size, shuffle=True, drop_last=True,
+                                collate_fn=collate_fn_conditional)
+        test_loader = DataLoader(dataset=gpt_test, batch_size=1, shuffle=False, drop_last=False, collate_fn=collate_fn_conditional)
+        val_loader = DataLoader(dataset=gpt_val, batch_size=1, shuffle=False, drop_last=False, collate_fn=collate_fn_conditional)
     return data_loader, test_loader, val_loader
 
 def prepare_mix_review(args, tokenizer):
