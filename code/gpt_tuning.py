@@ -17,7 +17,7 @@ from tqdm import tqdm, trange
 import random
 from utils import clean_text, text_standardize, construct_grouped_parameters, get_unfreezing_funcs
 from gpt_loader import GptDataset, collate_fn,collate_fn_keyword, prepare_mix_review, update_mix_review, get_data
-
+import gpt_sample
 # OPTIONAL: if you want to have more information on what's happening, activate the logger as follows
 import logging
 
@@ -60,7 +60,7 @@ def parse_arguments():
                         help="The output directory where the model predictions and checkpoints will be written.")
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--num_train_epochs', type=int, default=1)
-    parser.add_argument('--train_batch_size', type=int, default=2)
+    parser.add_argument('--train_batch_size', type=int, default=1)
     parser.add_argument('--max_grad_norm', type=int, default=1)
     parser.add_argument('--learning_rate', type=float, default=6.25e-5)
     parser.add_argument('--warmup_proportion', type=float, default=0.1)
@@ -79,6 +79,7 @@ def parse_arguments():
     parser.add_argument('--kbert', action='store_true')
     parser.add_argument('--kbert_mask', action='store_true')
     parser.add_argument('--kbert_position', action='store_true')
+    parser.add_argument('--eval_rouge', action='store_true')
     args = parser.parse_args()
     print(args)
     return args
@@ -94,12 +95,13 @@ def load_model(args):
     # ====== Load GPT2 model ========
     model_dir = '../models/' + args.model_dir
 #     model = GPT2LMHeadModel.from_pretrained(model_dir)
-    model = GPT2LMHeadModel.from_pretrained('gpt2')
+    model = GPT2LMHeadModel.from_pretrained('gpt2-medium')
+#     model = GPT2LMHeadModel.from_pretrained('gpt2')
     if USE_CUDA:
         model.cuda()
 #     tokenizer = GPT2Tokenizer.from_pretrained(model_dir)
-    tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
-
+    tokenizer = GPT2Tokenizer.from_pretrained('gpt2-medium')
+#     tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
     num_added_toks = tokenizer.add_tokens(['<speaker1>', '<speaker2>', '<augment>', '<ref>'])
     model.resize_token_embeddings(len(tokenizer))
     tokenizer.eos = 50256
@@ -151,26 +153,19 @@ def main():
     model.train()
     exp_average_loss = None
     progress_bar = trange(int(args.num_train_epochs), desc="Epoch", leave=True)
-    min_eval_loss = 100  # large enough number
+    prev_eval_loss = 100  # large enough number
     early_terminate_counter = 0
     for epo in progress_bar:
     # for _ in range(int(args.num_train_epochs)):
         # data_loader = update_mix_review(gpt_train, gpt_alex, epo, mix_ratio=4, mix_decay=0.7)
+                
         for sample in tqdm(data_loader):
-        # for sample in data_loader:
-#             import pdb;pdb.set_trace()
-#             if args.cross_attention:
-#                 x, type_x, pos_x, lm_x, x_len, _, keyword_x = sample
-#             else:
-#                 x, type_x, pos_x, lm_x, x_len, _ = sample
-#                 keyword_x = None
             x, type_x, pos_x, lm_x, x_len, attention_mask = sample
             if not args.kbert:
                 attention_mask = None
             input_len = x_len[0]
             lm_x[:, x_len[0] + 1 + args.first_K_tokens:-1] = -1
-#             loss = model(x, position_ids=pos_x, token_type_ids=type_x, labels=lm_x, key_word=keyword_x,
-#                          use_keyword=args.cross_attention)[0]
+
             loss = model(x, position_ids=pos_x, token_type_ids=type_x, labels=lm_x, attention_mask=attention_mask)[0]
             loss.backward()
             optimizer.step()
@@ -181,10 +176,12 @@ def main():
 
         eval_loss = evaluate(model, val_loader, use_keyword=args.cross_attention)
         print("Eval loss: {}".format(eval_loss))
-        if eval_loss < min_eval_loss:  # save the model only when the loss is the smallest
+        
+        
+        if eval_loss < prev_eval_loss:  # save the model only when the loss is the smallest
         #if True:
             early_terminate_counter = 0
-            min_eval_loss = eval_loss
+            prev_eval_loss = eval_loss
 
             # # ==== Save the model ====
             # # Save a trained model, configuration and tokenizer
@@ -200,10 +197,23 @@ def main():
             model.save_pretrained(output_dir + args.output_dir)
             tokenizer.save_pretrained(output_dir + args.output_dir)
         else:
+            prev_eval_loss = eval_loss
             print("eval loss increasing!")
             early_terminate_counter += 1
-            if early_terminate_counter > 3:  # if the eval loss does not decrease for 5 epochs, terminate early.
+            if early_terminate_counter >= 2:  # if the eval loss does not decrease for 5 epochs, terminate early.
+                print('='*30+str(epo)+'='*30)
                 return
-
+            
+        if args.eval_rouge:
+            args.nsamples = 1
+            args.length = -1
+            args.batch_size = 1
+            args.temperature = 1.0
+            args.top_k = 0
+            args.top_p = 0.95
+            hyp, ref, context = gpt_sample.run_model(args, model, tokenizer, val_loader)
+            gpt_sample.print_metric(hyp, ref, context)
+            model.train()
+            
 if __name__ == '__main__':
     main()

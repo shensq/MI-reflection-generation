@@ -92,7 +92,7 @@ def sample_sequence(model, length, context, num_samples=1, temperature=1,
         if torch.cuda.is_available():
             output_attention_mask = output_attention_mask.cuda()
     with torch.no_grad():
-        for i in trange(length):
+        for i in range(length):
 #             inputs = {'input_ids': generated, 'past': None, 'key_word': key_word, 'use_keyword':use_keyword}
             current_length = generated.shape[-1]
             if args.kbert:
@@ -144,22 +144,17 @@ def run_model(args, model, tokenizer, test_loader):
     hyp = []
     ref = []
     context = []
-    f = open('../result/'+args.output_dir+'.txt','w')
-    f_ref = open('../result/reference_'+args.output_dir+'.txt','w')
-    
-    for i,sample in enumerate(test_loader):
-        # if args.cross_attention:
-        #     x, type_x, pos_x, lm_x, x_len, meta, keyword_x = sample
-        # else:
-        #     x, type_x, pos_x, lm_x, x_len, meta = sample
-        #     keyword_x = None
+#     f = open('../result/'+args.output_dir+'.txt','w')
+#     f_ref = open('../result/reference_'+args.output_dir+'.txt','w')
+
+    for sample in tqdm(test_loader):
         x, type_x, pos_x, lm_x, x_len, attention_mask = sample
         input_len = x_len[0] # The number of tokens of the context utterances
         context_tokens = x[0][:input_len+1] # at evaluation stage, the input is without the ground truth
 
         generated = 0
         for i in range(args.nsamples // args.batch_size):
-            decode_length = int(len(context_tokens))
+            decode_length = min(int(0.5 * len(context_tokens)),192)
             # if args.augment:
             #     decode_length = int(0.5 * (5/6) * len(context_tokens))
             out = sample_sequence(
@@ -171,18 +166,31 @@ def run_model(args, model, tokenizer, test_loader):
             out = out[:, len(context_tokens):-1].tolist() # the generated result,get rid of eos
 
             ref.append(tokenizer.decode(x[0].tolist()[len(context_tokens):-1]))
-            f_ref.write(tokenizer.decode(x[0].tolist()[len(context_tokens):-1]))
-            f_ref.write('\n')
+#             f_ref.write(tokenizer.decode(x[0].tolist()[len(context_tokens):-1]))
+#             f_ref.write('\n')
 
             hyp.append(tokenizer.decode(out[0]))
-            f.write(tokenizer.decode(out[0]))
-            f.write('\n')
+#             f.write(tokenizer.decode(out[0]))
+#             f.write('\n')
 
             context.append(tokenizer.decode(x[0].tolist()[:len(context_tokens)]))
-    f.close()
-    f_ref.close()
+#     f.close()
+#     f_ref.close()
     return hyp, ref, context
 
+def print_metric(hyp, ref, context, effective_length=1024):
+    # ===== Calculate rouge ========
+    rouge = Rouge()
+    print(len(hyp))
+    print(len(ref))
+    hyp, ref = zip(*[(x,y) for x,y in zip(hyp, ref) if len(x)>3 and len(y)>3])
+    print(len(hyp))
+    hyp = [x[:effective_length] for x in hyp]
+    ref = [x[:effective_length] for x in ref]
+    scores = rouge.get_scores(hyp, ref,avg=True)
+    print("ROUGE",scores)
+
+        
 def calculate_metric(hyp, ref, context, effective_length=1024):
     # ===== Calculate rouge ========
     with open('../result/rouge.txt','a') as f_result:
@@ -222,6 +230,12 @@ def rouge_rank(hyp, ref, context):
     scores_content = sorted(scores_content, key=lambda x:x[0]['rouge-1']['f'], reverse=True)
     return scores_content
 
+def set_seed(seed):
+    np.random.seed(seed)
+    torch.random.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.manual_seed(seed)
+    
 if __name__ == '__main__':
     USE_CUDA = torch.cuda.is_available()
     logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
@@ -256,17 +270,27 @@ if __name__ == '__main__':
     print(args)
 
     # Setup the random seeds.
-    np.random.seed(args.seed)
-    torch.random.manual_seed(args.seed)
-    torch.cuda.manual_seed(args.seed)
-    torch.manual_seed(args.seed)
+    set_seed(args.seed)
 
     model, tokenizer = load_model_data(args)
     split_size = {'train': 0.90, 'test': 0.05, 'val': 0.05}
     data_loader, test_loader, val_loader = get_data(args, split_size=split_size, tokenizer=tokenizer)
     # model, tokenizer, test_loader = load_model_data(args) # TODO: this is for old get_data
-    # import pdb;pdb.set_trace()
-    hyp, ref, context = run_model(args, model, tokenizer, test_loader)
+    
+#     seed_list = [0,10,]
+    seed_list = [20,30]
+#     seed_list = [0,]
+    hyp_all = []
+    ref_all = []
+    context_all = []
+    
+    for seed in seed_list:
+        set_seed(seed)
+        print("Using random seed {}".format(seed))
+        hyp, ref, context = run_model(args, model, tokenizer, test_loader)
+        hyp_all += hyp
+        ref_all += ref
+        context_all += context
     sample_ranked = rouge_rank(hyp, ref, context)
     with open("../data_processed/rouge_rank_" + args.model_dir,'wb') as f:
         pickle.dump(sample_ranked, f)

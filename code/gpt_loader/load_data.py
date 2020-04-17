@@ -543,14 +543,19 @@ class GptDataset_KBERT(Dataset):
         pickle_handler = open("../data_processed/data_comet_dict", 'rb')
 
         self.data = pickle.load(pickle_handler)
+        
+        self.max_length = 510
         self.tokenizer = tokenizer
         self.args = args
         self.num_turns = args.num_turns
         self.ref, self.speaker1, self.speaker2 = tokenizer.ref, tokenizer.speaker1, tokenizer.speaker2
         self.eos = tokenizer.eos
         self.augment = tokenizer.augment
-        # self.args.kbert_mask = True
-        # self.args.kbert_position = True
+
+        if not self.args.kbert:
+            self.args.kbert_mask = False
+            self.args.kbert_position = False
+            print("Not using kbert scheme.")
         if self.args.kbert_mask:
             print("using kbert-style attention mask")
         if self.args.kbert_position:
@@ -613,13 +618,14 @@ class GptDataset_KBERT(Dataset):
             last_related_token_index = len(srl_mask[i]) - 1 - srl_mask[i][::-1].index(1)
 
             # add comet output
-            if comet_encoded[i] is not None:
-                x += [self.augment] + comet_encoded[i]
-                type_x += [self.augment] * (len(comet_encoded[i]) + 1)
+            if self.args.kbert:
+                if comet_encoded[i] is not None:
+                    x += [self.augment] + comet_encoded[i]
+                    type_x += [self.augment] * (len(comet_encoded[i]) + 1)
 
-                # +2 for the special token and the requirement of one-number larger than the utterance
-                soft_position_x += list(range(soft_loc + 2 + last_related_token_index,
-                                              soft_loc + 2 + last_related_token_index + (len(comet_encoded[i]) + 1)))
+                    # +2 for the special token and the requirement of one-number larger than the utterance
+                    soft_position_x += list(range(soft_loc + 2 + last_related_token_index,
+                                                  soft_loc + 2 + last_related_token_index + (len(comet_encoded[i]) + 1)))
 
             soft_loc += (len(context_encoded[i]) + 1)
             is_speaker1 = not is_speaker1
@@ -634,7 +640,13 @@ class GptDataset_KBERT(Dataset):
         lm_x += [-100] + response_encoded + [self.eos]
 
         soft_position_x += list(range(soft_loc, soft_loc + len(response_encoded) + 2))
-
+        
+        
+        x = x[:self.max_length]
+        type_x = type_x[:self.max_length]
+        lm_x = lm_x[:self.max_length]
+        soft_position_x = soft_position_x[:self.max_length]
+        
         # build attention mask
         attention_mask = torch.tril(torch.ones(len(x), len(x)))
         if self.args.kbert_mask:
@@ -691,11 +703,12 @@ def get_data(args, tokenizer, split_size):
         pickle_handler = open('../data_processed/' + args.special_input, 'rb')
         x_y_meta = pickle.load(pickle_handler)
         gpt_data = GptDataset(x_y_meta, tokenizer, args.output_dir, num_turns=args.num_turns)
-    elif not args.kbert:
-        print("Using full data.")
-        pickle_handler = open('../data_processed/x_y_with_comet', 'rb') # TODO: change back to the old data.
-        x_y_meta = pickle.load(pickle_handler)
-        gpt_data = GptDataset_full(x_y_meta, tokenizer, args=args)
+#     #======================origin without kbert======
+#     elif not args.kbert:
+#         print("Using full data.")
+#         pickle_handler = open('../data_processed/x_y_with_comet', 'rb') # TODO: change back to the old data.
+#         x_y_meta = pickle.load(pickle_handler)
+#         gpt_data = GptDataset_full(x_y_meta, tokenizer, args=args)
     else:
         print("Using KBERT data")
         gpt_data = GptDataset_KBERT(tokenizer, args=args)
