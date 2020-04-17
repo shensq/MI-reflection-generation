@@ -810,7 +810,7 @@ def get_data(args, tokenizer, split_size):
 
         data_val = pickle.load(open(file_path+'test_ref', 'rb'))
         gpt_val = GptDataset_full_condition(data_val, tokenizer, args=args)
-    else:
+    elif args.kbert:
         print("Using KBERT data")
         gpt_data = GptDataset_KBERT(tokenizer, args=args)
         print("Dataset initialized. There are {} samples.".format(len(gpt_data)))
@@ -821,6 +821,18 @@ def get_data(args, tokenizer, split_size):
         gpt_train, gpt_test, gpt_val = torch.utils.data.random_split(gpt_data,
                                                                      [len(gpt_data) - test_size - val_size, test_size,
                                                                       val_size])
+    else:
+        print("Using full data.")
+        file_path = "../data_processed/"
+        data_train = pickle.load(open(file_path+'train_ref', 'rb'))
+        gpt_train= GptDataset_full_condition(data_train, tokenizer, args=args)
+
+        data_test = pickle.load(open(file_path+'test_ref', 'rb'))
+        gpt_test = GptDataset_full_condition(data_test, tokenizer, args=args)
+
+        data_val = pickle.load(open(file_path+'test_ref', 'rb'))
+        gpt_val = GptDataset_full_condition(data_val, tokenizer, args=args)
+
         # # ======= one-time plug in========
         # x_y_meta_pre = pickle.load(open("../data_processed/data_comet_dict",'rb'))
         # x_y_meta = []
