@@ -130,6 +130,8 @@ def load_model_data(args):
     tokenizer.speaker2 = 50258
     tokenizer.augment = 50259
     tokenizer.ref = 50260
+    tokenizer.is_ref = 50261
+    tokenizer.is_non_ref = 50262
     return model, tokenizer
 
 def run_model(args, model, tokenizer, test_loader):
