@@ -279,8 +279,9 @@ if __name__ == '__main__':
     # model, tokenizer, test_loader = load_model_data(args) # TODO: this is for old get_data
     
 #     seed_list = [0,10,]
-    seed_list = [20,30]
+#     seed_list = [20,30]
 #     seed_list = [0,]
+    seed_list = [args.seed]
     hyp_all = []
     ref_all = []
     context_all = []
