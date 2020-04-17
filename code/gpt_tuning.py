@@ -80,6 +80,7 @@ def parse_arguments():
     parser.add_argument('--kbert_mask', action='store_true')
     parser.add_argument('--kbert_position', action='store_true')
     parser.add_argument('--eval_rouge', action='store_true')
+    parser.add_argument('--conditional', action='store_true')
     args = parser.parse_args()
     print(args)
     return args
@@ -96,20 +97,22 @@ def load_model(args):
     model_dir = '../models/' + args.model_dir
 #     model = GPT2LMHeadModel.from_pretrained(model_dir)
     model = GPT2LMHeadModel.from_pretrained('gpt2-medium')
-#     model = GPT2LMHeadModel.from_pretrained('gpt2')
+    # model = GPT2LMHeadModel.from_pretrained('gpt2')
     if USE_CUDA:
         model.cuda()
 #     tokenizer = GPT2Tokenizer.from_pretrained(model_dir)
     tokenizer = GPT2Tokenizer.from_pretrained('gpt2-medium')
-#     tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
-    num_added_toks = tokenizer.add_tokens(['<speaker1>', '<speaker2>', '<augment>', '<ref>'])
+    # tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+    num_added_toks = tokenizer.add_tokens(['<speaker1>', '<speaker2>', '<augment>', '<ref>', '<is_ref>',
+                                           '<is_non_ref>'])
     model.resize_token_embeddings(len(tokenizer))
     tokenizer.eos = 50256
     tokenizer.speaker1 = 50257
     tokenizer.speaker2 = 50258
     tokenizer.augment = 50259
     tokenizer.ref = 50260
-
+    tokenizer.is_ref = 50261
+    tokenizer.is_non_ref = 50262
     print('Model loaded.')
     return model, tokenizer
 

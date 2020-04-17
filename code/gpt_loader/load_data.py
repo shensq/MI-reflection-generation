@@ -407,7 +407,7 @@ class GptDataset_full(Dataset):
         if self.args.keyword:
             x += [self.augment] + self.keyword_encoded[index]
         type_x += [self.augment] * len(x)
-        
+
         is_speaker1 = bool(self.num_turns % 2) # which speaker start the conversation
 
         for utt in self.x_encoded[index][-self.num_turns:]:
@@ -434,11 +434,100 @@ class GptDataset_full(Dataset):
         position_x = torch.Tensor(position_x)
         lm_x = torch.Tensor(lm_x)
         x_len = x.shape[0]
-        
+
         return x,type_x,position_x,lm_x,total_input_length,self.meta[index]
 
     def __len__(self):
         return len(self.x_encoded)
+
+
+class GptDataset_full_condition(Dataset):
+    def _split(self, x_y_meta):
+        x_all = []
+        y_all = []
+        meta_all = []
+        aug_all = []
+        keyword_all = []
+        for x, y, meta, aug, keyword in x_y_meta:
+            meta_all.append(meta)
+            # update for the new data format
+            aug = ''.join([a[1] for a in aug])
+            x_all.append([self.tokenizer.encode(text_standardize(x_i)) for x_i in x])
+            y_all.append(self.tokenizer.encode(text_standardize(y)))
+            aug_all.append(self.tokenizer.encode(text_standardize(aug)))
+            keyword_all.append(self.tokenizer.encode(text_standardize(keyword)))
+        return x_all, y_all, meta_all, aug_all, keyword_all
+
+    def _filt(self, length=1024):
+        data = zip(self.x_encoded, self.y_encoded, self.meta, self.aug_encoded, self.keyword_encoded)
+        data = [sample for sample in data if
+                sum([len(sen) for sen in sample[0]][-self.args.num_turns:]) + len(sample[1]) + len(sample[3]) + len(
+                    sample[4]) < 850]
+        self.x_encoded, self.y_encoded, self.meta, self.aug_encoded, self.keyword_encoded = zip(*data)
+        self.x_encoded = list(self.x_encoded)
+        self.y_encoded = list(self.y_encoded)
+        self.meta = list(self.meta)
+        self.aug_encoded = list(self.aug_encoded)
+        self.keyword_encoded = list(self.keyword_encoded)
+
+    def __init__(self, x_y_meta, tokenizer, args):
+        self.x_y_meta = x_y_meta
+        self.num_turns = args.num_turns
+        self.tokenizer = tokenizer
+        self.args = args
+        self.x_encoded, self.y_encoded, self.meta, self.aug_encoded, self.keyword_encoded = self._split(x_y_meta)
+        self._filt()  # TODO: add back filt for mix-review
+
+        self.ref, self.speaker1, self.speaker2 = tokenizer.ref, tokenizer.speaker1, tokenizer.speaker2
+        self.eos = tokenizer.eos
+        self.augment = tokenizer.augment
+        self.is_ref, self.is_non_ref = tokenizer.is_ref, tokenizer.is_non_ref
+        self.code_set  =  set(['GIV', 'QUEST', 'SEEK', 'AF', 'EMPH', 'PWOP', 'PWP', 'CON'])
+
+    def __getitem__(self, index):
+        x = []
+        type_x = []
+        lm_x = []
+
+        is_speaker1 = bool(self.num_turns % 2)  # which speaker start the conversation
+
+        if self.meta[index][2] in self.code_set:
+            x += [self.is_non_ref]
+            type_x += [self.is_non_ref]
+        else:
+            x += [self.is_ref]
+            type_x += [self.is_ref]
+
+        for utt in self.x_encoded[index][-self.num_turns:]:
+            if is_speaker1:  # add the prefix special token for each utterance
+                x += [self.speaker1]
+                type_x += [self.speaker1] * (len(utt) + 1)
+            else:
+                x += [self.speaker2]
+                type_x += [self.speaker2] * (len(utt) + 1)
+            x += utt
+            is_speaker1 = not is_speaker1
+        lm_x += [-100] * len(x)  # all position for the input is masked for loss calculation
+
+        total_input_length = len(x)
+
+        x += [self.ref_start] + self.y_encoded[index] + [self.eos]
+
+        type_x += [self.ref_start] * (len(self.y_encoded[index]) + 2)
+        lm_x += [-100] + self.y_encoded[index] + [self.eos]
+        position_x = list(range(len(x)))
+
+        x = torch.Tensor(x)
+        type_x = torch.Tensor(type_x)
+        position_x = torch.Tensor(position_x)
+        lm_x = torch.Tensor(lm_x)
+        x_len = x.shape[0]
+
+        return x, type_x, position_x, lm_x, total_input_length, self.meta[index]
+
+    def __len__(self):
+        return len(self.x_encoded)
+
 
 class GptDataset_KBERT_old(Dataset):
     def get_comet_aug_deque(self, comet_data, num_turns=5):
@@ -539,8 +628,8 @@ class GptDataset_KBERT_old(Dataset):
 
 
 class GptDataset_KBERT(Dataset):
-    def __init__(self, tokenizer, args):
-        pickle_handler = open("../data_processed/data_comet_dict", 'rb')
+    def __init__(self, tokenizer, args, file_path="../data_processed/data_comet_dict"):
+        pickle_handler = open(file_path, 'rb')
 
         self.data = pickle.load(pickle_handler)
         
@@ -703,31 +792,56 @@ def get_data(args, tokenizer, split_size):
         pickle_handler = open('../data_processed/' + args.special_input, 'rb')
         x_y_meta = pickle.load(pickle_handler)
         gpt_data = GptDataset(x_y_meta, tokenizer, args.output_dir, num_turns=args.num_turns)
+        # TODO: not finished
 #     #======================origin without kbert======
 #     elif not args.kbert:
 #         print("Using full data.")
 #         pickle_handler = open('../data_processed/x_y_with_comet', 'rb') # TODO: change back to the old data.
 #         x_y_meta = pickle.load(pickle_handler)
 #         gpt_data = GptDataset_full(x_y_meta, tokenizer, args=args)
+    elif args.conditional:
+        print("using conditional generation data")
+        file_path = "../data_processed/"
+        data_train = pickle.load(open(file_path+'train_ref', 'rb')) + pickle.load(open(file_path+'train_non_ref','rb'))
+        gpt_train= GptDataset_full_condition(data_train, tokenizer, args=args)
+
+        data_test = pickle.load(open(file_path+'test_ref', 'rb'))
+        gpt_test = GptDataset_full_condition(data_test, tokenizer, args=args)
+
+        data_val = pickle.load(open(file_path+'test_ref', 'rb'))
+        gpt_val = GptDataset_full_condition(data_val, tokenizer, args=args)
     else:
         print("Using KBERT data")
         gpt_data = GptDataset_KBERT(tokenizer, args=args)
-    print("Dataset initialized. There are {} samples.".format(len(gpt_data)))
+        print("Dataset initialized. There are {} samples.".format(len(gpt_data)))
 
-    test_size = int(len(gpt_data) * split_size['test'])
-    val_size = int(len(gpt_data) * split_size['val'])
+        test_size = int(len(gpt_data) * split_size['test'])
+        val_size = int(len(gpt_data) * split_size['val'])
 
-    gpt_train, gpt_test, gpt_val = torch.utils.data.random_split(gpt_data,
-                                                                 [len(gpt_data) - test_size - val_size, test_size,
-                                                                  val_size])
-
-    # import pdb;pdb.set_trace()
-    # with open('../../mi_data/train','wb') as f:
-    #     pickle.dump(gpt_train, f)
-    # with open('../../mi_data/test','wb') as f:
-    #     pickle.dump(gpt_test, f)
-    # with open('../../mi_data/val','wb') as f:
-    #     pickle.dump(gpt_val, f)
+        gpt_train, gpt_test, gpt_val = torch.utils.data.random_split(gpt_data,
+                                                                     [len(gpt_data) - test_size - val_size, test_size,
+                                                                      val_size])
+        # # ======= one-time plug in========
+        # x_y_meta_pre = pickle.load(open("../data_processed/data_comet_dict",'rb'))
+        # x_y_meta = []
+        # for x in x_y_meta_pre:
+        #     context_i = x['context']
+        #     response_i = x['response']
+        #     meta_i = x['meta']
+        #     x_y_meta.append([context_i, response_i, meta_i, "", ""])
+        #
+        # with open('../data_processed/train_ref', 'wb') as f:
+        #     idx = gpt_train.indices
+        #     gpt_train =[x_y_meta[i] for i in idx]
+        #     pickle.dump(gpt_train, f)
+        # with open('../data_processed/test_ref', 'wb') as f:
+        #     idx = gpt_test.indices
+        #     gpt_test = [x_y_meta[i] for i in idx]
+        #     pickle.dump(gpt_test, f)
+        # with open('../data_processed/val_ref', 'wb') as f:
+        #     idx = gpt_val.indices
+        #     gpt_val = [x_y_meta[i] for i in idx]
+        #     pickle.dump(gpt_val, f)
 
     if 'train_batch_size' not in args:
         args.train_batch_size = 1

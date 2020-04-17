@@ -263,6 +263,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_turns', type=int, default=5)
     parser.add_argument('--kbert_mask', action='store_true')
     parser.add_argument('--kbert_position', action='store_true')
+    parser.add_argument('--conditional', action='store_true')
     args = parser.parse_args()
     if args.batch_size == -1:
         args.batch_size = 1

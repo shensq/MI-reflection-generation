@@ -9,7 +9,7 @@ def annotate_topic(preprocessed_data_path='./',file_path = '/Users/shensq/Docume
     """
     Do annotation of topic manually.
     """
-    files = glob.glob(file_path+'[1-9m]*.txt') # bad session is exclued
+    files = glob.glob(file_path+'[0-9m]*.txt') # bad session is exclued
     tag_set = ['Medication adherence','Smoking cessation','Weight management','others']
     file_to_tag=[]
     finished_file = []
