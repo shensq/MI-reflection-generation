@@ -511,16 +511,16 @@ class GptDataset_full_condition(Dataset):
 
         total_input_length = len(x)
 
-        x += [self.ref_start] + self.y_encoded[index] + [self.eos]
+        x += [self.ref] + self.y_encoded[index] + [self.eos]
 
-        type_x += [self.ref_start] * (len(self.y_encoded[index]) + 2)
+        type_x += [self.ref] * (len(self.y_encoded[index]) + 2)
         lm_x += [-100] + self.y_encoded[index] + [self.eos]
         position_x = list(range(len(x)))
 
-        x = torch.Tensor(x)
-        type_x = torch.Tensor(type_x)
-        position_x = torch.Tensor(position_x)
-        lm_x = torch.Tensor(lm_x)
+        x = torch.tensor(x)
+        type_x = torch.tensor(type_x)
+        position_x = torch.tensor(position_x)
+        lm_x = torch.tensor(lm_x)
         x_len = x.shape[0]
 
         return x, type_x, position_x, lm_x, total_input_length, self.meta[index]
