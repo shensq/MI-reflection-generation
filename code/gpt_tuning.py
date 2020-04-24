@@ -96,13 +96,13 @@ def load_model(args):
     # ====== Load GPT2 model ========
     model_dir = '../models/' + args.model_dir
 #     model = GPT2LMHeadModel.from_pretrained(model_dir)
-    model = GPT2LMHeadModel.from_pretrained('gpt2-medium')
-    # model = GPT2LMHeadModel.from_pretrained('gpt2')
+#     model = GPT2LMHeadModel.from_pretrained('gpt2-medium')
+    model = GPT2LMHeadModel.from_pretrained('gpt2')
     if USE_CUDA:
         model.cuda()
 #     tokenizer = GPT2Tokenizer.from_pretrained(model_dir)
-    tokenizer = GPT2Tokenizer.from_pretrained('gpt2-medium')
-    # tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+#     tokenizer = GPT2Tokenizer.from_pretrained('gpt2-medium')
+    tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
     # num_added_toks = tokenizer.add_tokens(['<speaker1>', '<speaker2>', '<augment>', '<ref>', '<is_ref>',
     #                                        '<is_non_ref>'])
     num_added_toks = tokenizer.add_tokens(['<speaker1>', '<speaker2>', '<augment>', '<ref>', '<is_cr>',

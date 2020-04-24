@@ -142,6 +142,32 @@ def load_model_data(args):
     tokenizer.is_con = 50270
     return model, tokenizer
 
+def code_conditional_generation(args, sample, tokenizer):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    x, type_x, pos_x, lm_x, x_len, attention_mask = sample
+    input_len = x_len[0]  # The number of tokens of the context utterances
+    context_tokens = x[0][:input_len + 1]  # at evaluation stage, the input is without the ground truth
+    code_set  =  {'CR','SR', 'GIV', 'QUEST', 'SEEK', 'AF', 'EMPH', 'PWOP', 'PWP', 'CON'}
+    for code in code_set:
+        code_token = getattr(tokenizer, 'is_'+code.lower())
+        x[0][0] = code_token
+        type_x[0][0] = code_token
+
+        for i in range(args.nsamples // args.batch_size):
+            decode_length = min(int(0.5 * len(context_tokens)), 192)
+            # if args.augment:
+            #     decode_length = int(0.5 * (5/6) * len(context_tokens))
+            out = sample_sequence(
+                model=model, length=decode_length,
+                context=context_tokens,
+                temperature=args.temperature, top_k=args.top_k, top_p=args.top_p,
+                device=device, attention_mask=attention_mask, args=args
+            )
+            out = out[:, len(context_tokens):-1].tolist()  # the generated result,get rid of eos
+            print(tokenizer.decode(x[0].tolist()[:len(context_tokens)]))
+            print('/n')
+            print(tokenizer.decode(out[0]))
+
 def run_model(args, model, tokenizer, test_loader):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.eval()
@@ -158,6 +184,9 @@ def run_model(args, model, tokenizer, test_loader):
 #     f_ref = open('../result/reference_'+args.output_dir+'.txt','w')
 
     for sample in tqdm(test_loader):
+        code_conditional_generation(args, sample, tokenizer)
+        continue
+
         x, type_x, pos_x, lm_x, x_len, attention_mask = sample
         input_len = x_len[0] # The number of tokens of the context utterances
         context_tokens = x[0][:input_len+1] # at evaluation stage, the input is without the ground truth

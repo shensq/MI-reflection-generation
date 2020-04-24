@@ -838,13 +838,13 @@ def get_data(args, tokenizer, split_size):
         print("using conditional generation data")
         file_path = "../data_processed/0423_"
         # data_train = pickle.load(open(file_path+'train_ref', 'rb')) + pickle.load(open(file_path+'train_non_ref','rb'))
-        data_train = pickle.load(open(file_path + 'train', 'rb'))
+        data_train = pickle.load(open(file_path + 'train', 'rb'))[:1000]
         gpt_train= GptDataset_full_condition(data_train, tokenizer, args=args)
 
-        data_test = pickle.load(open(file_path+'test', 'rb'))
+        data_test = pickle.load(open(file_path+'test', 'rb'))[:100]
         gpt_test = GptDataset_full_condition(data_test, tokenizer, args=args)
 
-        data_val = pickle.load(open(file_path+'test', 'rb'))
+        data_val = pickle.load(open(file_path+'test', 'rb'))[:100]
         gpt_val = GptDataset_full_condition(data_val, tokenizer, args=args)
     elif args.kbert:
         print("Using KBERT data")
