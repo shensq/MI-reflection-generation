@@ -4,7 +4,7 @@ import numpy as np
 import time
 import pickle 
 from tqdm import tqdm
-
+import random
 def annotate_topic(preprocessed_data_path='./',file_path = '/Users/shensq/Documents/NLP/MI_data/datasetMI_real_standardized/annotations/'):
     """
     Do annotation of topic manually.
@@ -36,7 +36,7 @@ def annotate_topic(preprocessed_data_path='./',file_path = '/Users/shensq/Docume
     with open(preprocessed_data_path+'session_topic','wb') as f:
         pickle.dump(file_to_tag_mod,f)
 
-def parse_text(num_turns=5,preprocessed_data_path='./',file_path = '/Users/shensq/Documents/NLP/MI_data/datasetMI_real_standardized/annotations/'):
+def parse_text_old(num_turns=5,preprocessed_data_path='./',file_path = '/Users/shensq/Documents/NLP/MI_data/datasetMI_real_standardized/annotations/'):
     def check_size(xy,min_length,max_length,num_turns=5):
         xs = xy[0]
         y = xy[1]
@@ -48,7 +48,7 @@ def parse_text(num_turns=5,preprocessed_data_path='./',file_path = '/Users/shens
             if len(x)>=max_length: # no requirement for minimum length in inputs
                 return False
         return True
-    files = glob.glob(file_path+'[1-9m]*.txt')
+    files = glob.glob(file_path+'[0-9m]*.txt')
     x_all = []
     y_all = []
     meta_all = []
@@ -95,6 +95,69 @@ def parse_text(num_turns=5,preprocessed_data_path='./',file_path = '/Users/shens
     with open(preprocessed_data_path+'x_y_meta','wb') as f:
         pickle.dump(x_y_meta,f)
 
+
+
+def parse_text(num_turns=10,preprocessed_data_path='../../data_processed/',file_path = '/Users/shensq/Documents/NLP/MI_data/datasetMI_real_standardized/annotations/'):
+    def check_size(xy,min_length,max_length,num_turns=5):
+        xs = xy[0]
+        y = xy[1]
+        if len(xs)!=num_turns:
+            return False
+        if len(y)<=min_length or len(y)>=max_length:
+            return False
+        for x in xs:
+            if len(x)>=max_length: # no requirement for minimum length in inputs
+                return False
+        return True
+    files = glob.glob(file_path+'[0-9m]*.txt')
+    x_all = []
+    y_all = []
+    meta_all = []
+    code_set = set([ 'CR',  'SR', 'GIV', 'QUEST', 'SEEK', 'AF', 'EMPH', 'PWOP', 'PWP', 'CON']) # all the MITI codes
+    pickle_handler = preprocessed_data_path+'session_topic_1111'
+    file_to_tag = pickle.load(open(pickle_handler,'rb'))
+
+    for file in tqdm(files):
+        topic = file_to_tag[file[len(file_path):]]
+        f = open(file)
+        data = []
+        for line in f:
+            line = line.split() # split only with space
+            data.append(line) # data[i] is a list of tokens from a single sentence
+        data.reverse() # reverse the order for sentences, which makes it easier to trace back
+
+        for i,sen in enumerate(data):
+#             if sen[0]=='SR' or sen[0]=='CR':
+            if sen[0] in code_set:
+                code = sen[0]
+                y = sen[1:] # get rid of the code itself
+                x = []
+                pointer = i
+                while data[pointer][0]!='T:': # find data[pointer] which contains the copy of detected relection
+                    pointer+=1
+                for j in range(pointer+1,len(data)): # trace up k valid utterances from the previous sentences to the top
+                    if data[j][0] in code_set:
+                        continue # skip sentence with MI codes since there will be a duplicate copy, and a single sentence may contains multiple codes
+                    x.append(data[j][1:]) # add an utterance into x, without the first token
+                    if len(x)>=num_turns:
+                        break # if reach the expected turn, stop
+                x.reverse() # reverse the sentence order back to normal
+                x_all.append(x)
+                y_all.append(y)
+                meta_all.append([file[len(file_path):],topic,code])
+    xy_filter = [xy for xy in zip(x_all,y_all,meta_all) if check_size(xy,1,100,num_turns)]
+    x_all_join = []
+    y_all_join = []
+    meta_all_join = []
+    for xy in xy_filter:
+        x_all_join.append([' '.join(i) for i in xy[0]])
+        y_all_join.append(' '.join(xy[1]))
+        meta_all_join.append(xy[2])
+    x_y_meta = list(zip(x_all_join,y_all_join,meta_all_join))
+    with open(preprocessed_data_path+'0423_x_y_meta','wb') as f:
+        pickle.dump(x_y_meta,f)
+    return x_y_meta
+
 def text_standardize(text):
     """
     fixes some issues the spacy tokenizer had on books corpus
@@ -137,8 +200,42 @@ def clean_text(text):
     text = re.sub("[-()\"#/@;:<>{}+=~.…,|!?]", "", text)
     return text
 
+def separate_dataset():
+    prefix = '../../data_processed/0423_'
+    data = pickle.load(open(prefix + 'x_y_meta', 'rb'))
+    random.seed(42)
+    random.shuffle(data)
+    target_code = {'SR', 'CR'}
+    train_size = int(0.9 * len(data))
+    test_size = int(0.05 * len(data))
+    val_size = len(data) - train_size - test_size
+
+    train = []
+    test = []
+    val = []
+
+    for d in data:
+        context, response, meta = d
+        if meta[2] in target_code:
+            if len(test) < test_size:
+                test.append([*d,'',''])
+            elif len(val) < val_size:
+                val.append([*d,'',''])
+            else:
+                train.append([*d,'',''])
+        else:
+            train.append([*d,'',''])
+    assert (len(train) + len(test) + len(val)) == len(data)
+    pickle.dump(train, open( prefix + 'train','wb'))
+    pickle.dump(test, open(prefix + 'test', 'wb'))
+    pickle.dump(val, open(prefix + 'val', 'wb'))
+
 def main():
     print("Use the preprocessing by importing functions instead.")
 
+    data = parse_text()
+    print(len(data))
+    separate_dataset()
+
 if __name__ == "__main__":
-    pass
+    main()

@@ -509,8 +509,12 @@ class GptDataset_full_condition(Dataset):
         self.ref, self.speaker1, self.speaker2 = tokenizer.ref, tokenizer.speaker1, tokenizer.speaker2
         self.eos = tokenizer.eos
         self.augment = tokenizer.augment
-        self.is_ref, self.is_non_ref = tokenizer.is_ref, tokenizer.is_non_ref
-        self.code_set  =  set(['GIV', 'QUEST', 'SEEK', 'AF', 'EMPH', 'PWOP', 'PWP', 'CON'])
+
+        self.code_set  =  set(['CR','SR', 'GIV', 'QUEST', 'SEEK', 'AF', 'EMPH', 'PWOP', 'PWP', 'CON'])
+        for c in self.code_set:
+            var_name = 'is_' + c.lower()
+            setattr(self, var_name, getattr(tokenizer, var_name))
+        print('Dataset initialized.')
 
     def __getitem__(self, index):
         x = []
@@ -519,12 +523,15 @@ class GptDataset_full_condition(Dataset):
 
         is_speaker1 = bool(self.num_turns % 2)  # which speaker start the conversation
 
-        if self.meta[index][2] in self.code_set:
-            x += [self.is_non_ref]
-            type_x += [self.is_non_ref]
-        else:
-            x += [self.is_ref]
-            type_x += [self.is_ref]
+        code_token = getattr(self, 'is_' + self.meta[index][2].lower())
+        x += [code_token]
+        type_x += [code_token]
+        # if self.meta[index][2] in self.code_set:
+        #     x += [self.is_non_ref]
+        #     type_x += [self.is_non_ref]
+        # else:
+        #     x += [self.is_ref]
+        #     type_x += [self.is_ref]
 
         for utt in self.x_encoded[index][-self.num_turns:]:
             if is_speaker1:  # add the prefix special token for each utterance
@@ -829,14 +836,15 @@ def get_data(args, tokenizer, split_size):
 #         gpt_data = GptDataset_full(x_y_meta, tokenizer, args=args)
     elif args.conditional:
         print("using conditional generation data")
-        file_path = "../data_processed/"
-        data_train = pickle.load(open(file_path+'train_ref', 'rb')) + pickle.load(open(file_path+'train_non_ref','rb'))
+        file_path = "../data_processed/0423_"
+        # data_train = pickle.load(open(file_path+'train_ref', 'rb')) + pickle.load(open(file_path+'train_non_ref','rb'))
+        data_train = pickle.load(open(file_path + 'train', 'rb'))
         gpt_train= GptDataset_full_condition(data_train, tokenizer, args=args)
 
-        data_test = pickle.load(open(file_path+'test_ref', 'rb'))
+        data_test = pickle.load(open(file_path+'test', 'rb'))
         gpt_test = GptDataset_full_condition(data_test, tokenizer, args=args)
 
-        data_val = pickle.load(open(file_path+'test_ref', 'rb'))
+        data_val = pickle.load(open(file_path+'test', 'rb'))
         gpt_val = GptDataset_full_condition(data_val, tokenizer, args=args)
     elif args.kbert:
         print("Using KBERT data")

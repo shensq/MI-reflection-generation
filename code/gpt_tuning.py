@@ -103,16 +103,28 @@ def load_model(args):
 #     tokenizer = GPT2Tokenizer.from_pretrained(model_dir)
     tokenizer = GPT2Tokenizer.from_pretrained('gpt2-medium')
     # tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
-    num_added_toks = tokenizer.add_tokens(['<speaker1>', '<speaker2>', '<augment>', '<ref>', '<is_ref>',
-                                           '<is_non_ref>'])
+    # num_added_toks = tokenizer.add_tokens(['<speaker1>', '<speaker2>', '<augment>', '<ref>', '<is_ref>',
+    #                                        '<is_non_ref>'])
+    num_added_toks = tokenizer.add_tokens(['<speaker1>', '<speaker2>', '<augment>', '<ref>', '<is_cr>',
+                                           '<is_sr>', '<is_giv>', '<is_quest>', '<is_seek>', '<is_af>', '<is_emph>',
+                                           '<is_pwop>', '<is_pwp>', '<is_con>'])
     model.resize_token_embeddings(len(tokenizer))
     tokenizer.eos = 50256
     tokenizer.speaker1 = 50257
     tokenizer.speaker2 = 50258
     tokenizer.augment = 50259
     tokenizer.ref = 50260
-    tokenizer.is_ref = 50261
-    tokenizer.is_non_ref = 50262
+    tokenizer.is_cr = 50261
+    tokenizer.is_sr = 50262
+    tokenizer.is_giv = 50263
+    tokenizer.is_quest = 50264
+    tokenizer.is_seek = 50265
+    tokenizer.is_af = 50266
+    tokenizer.is_emph = 50267
+    tokenizer.is_pwop = 50268
+    tokenizer.is_pwp = 50269
+    tokenizer.is_con = 50270
+
     print('Model loaded.')
     return model, tokenizer
 
