@@ -54,12 +54,12 @@ def parse_arguments():
     :return args: A parser object with hyper-parameters' name and their values.
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_dir", default='345M_Alex', type=str, required=False,
+    parser.add_argument("--model_dir", default='gpt2', type=str, required=False,
                         help="The directory of the model to be tuned.")
     parser.add_argument("--output_dir", default='mi_tuned', type=str, required=False,
                         help="The output directory where the model predictions and checkpoints will be written.")
     parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument('--num_train_epochs', type=int, default=1)
+    parser.add_argument('--num_train_epochs', type=int, default=10)
     parser.add_argument('--train_batch_size', type=int, default=1)
     parser.add_argument('--max_grad_norm', type=int, default=1)
     parser.add_argument('--learning_rate', type=float, default=6.25e-5)
@@ -95,14 +95,14 @@ def load_model(args):
     USE_CUDA = torch.cuda.is_available()
     # ====== Load GPT2 model ========
     model_dir = '../models/' + args.model_dir
-#     model = GPT2LMHeadModel.from_pretrained(model_dir)
+    model = GPT2LMHeadModel.from_pretrained(model_dir)
 #     model = GPT2LMHeadModel.from_pretrained('gpt2-medium')
-    model = GPT2LMHeadModel.from_pretrained('gpt2')
+#     model = GPT2LMHeadModel.from_pretrained('gpt2')
     if USE_CUDA:
         model.cuda()
-#     tokenizer = GPT2Tokenizer.from_pretrained(model_dir)
+    tokenizer = GPT2Tokenizer.from_pretrained(model_dir)
 #     tokenizer = GPT2Tokenizer.from_pretrained('gpt2-medium')
-    tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
+#     tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
     # num_added_toks = tokenizer.add_tokens(['<speaker1>', '<speaker2>', '<augment>', '<ref>', '<is_ref>',
     #                                        '<is_non_ref>'])
     num_added_toks = tokenizer.add_tokens(['<speaker1>', '<speaker2>', '<augment>', '<ref>', '<is_cr>',
@@ -193,8 +193,8 @@ def main():
         print("Eval loss: {}".format(eval_loss))
         
         
-        if eval_loss < prev_eval_loss:  # save the model only when the loss is the smallest
-        #if True:
+        # if eval_loss < prev_eval_loss:  # save the model only when the loss is the smallest
+        if True:
             early_terminate_counter = 0
             prev_eval_loss = eval_loss
 
@@ -202,13 +202,15 @@ def main():
             # # Save a trained model, configuration and tokenizer
             # model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
             # # If we save using the predefined names, we can load using `from_pretrained`
-            output_dir = '../models/'
+            output_dir = '../experiments/'
             # output_model_file = os.path.join(output_dir + args.output_dir, WEIGHTS_NAME)
             # output_config_file = os.path.join(output_dir + args.output_dir, CONFIG_NAME)
             #
             # torch.save(model_to_save.state_dict(), output_model_file)
             # model_to_save.config.to_json_file(output_config_file)
             # tokenizer.save_vocabulary(output_dir + args.output_dir)
+
+            print(args.output_dir)
             model.save_pretrained(output_dir + args.output_dir)
             tokenizer.save_pretrained(output_dir + args.output_dir)
         else:

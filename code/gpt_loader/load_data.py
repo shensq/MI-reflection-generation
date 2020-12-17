@@ -468,6 +468,46 @@ class GptDataset_full(Dataset):
     def __len__(self):
         return len(self.x_encoded)
 
+class GptDataset_nli(GptDataset):
+    def __init__(self, x_y_meta, tokenizer, filter_mode=None, num_turns=5):
+        super(GptDataset_nli, self).__init__(x_y_meta, tokenizer)
+        self.label = [1] * len(self.x_encoded) + [0] * len(self.x_encoded)
+        self.x_encoded = self.x_encoded + self.x_encoded
+        self.y_encoded = list(self.y_encoded) + random.sample(self.y_encoded, len(self.y_encoded))
+        self.x_encoded, self.y_encoded, self.label = zip(
+            *random.sample(list(zip(self.x_encoded, self.y_encoded, self.label)), len(self.x_encoded)))
+
+    def __getitem__(self, index):
+        # former utterances - premise -speaker1
+        # response - hypothesis - ref_start
+        x = []
+        type_x = []
+        lm_x = []
+        is_speaker1 = bool(len(self.x_encoded[index]) % 2)  # which speaker start the conversation
+
+        for utt in self.x_encoded[index]:
+            if is_speaker1:  # add the prefix special token for each utterance
+                x += [self.speaker1]
+                type_x += [self.speaker1] * (len(utt) + 1)
+            else:
+                x += [self.speaker2]
+                type_x += [self.speaker2] * (len(utt) + 1)
+            x += utt
+            is_speaker1 = not is_speaker1
+
+        total_input_length = len(x)
+
+        x += [self.ref_start] + self.y_encoded[index] + [self.eos]
+
+        type_x += [self.ref_start] * (len(self.y_encoded[index]) + 2)
+        position_x = list(range(len(x)))
+
+        x = torch.Tensor(x)
+        type_x = torch.Tensor(type_x)
+        position_x = torch.Tensor(position_x)
+        x_len = x.shape[0]
+
+        return x, type_x, position_x, lm_x, self.label[index]
 
 class GptDataset_full_condition(Dataset):
     def _split(self, x_y_meta):
@@ -476,7 +516,7 @@ class GptDataset_full_condition(Dataset):
         meta_all = []
         aug_all = []
         keyword_all = []
-        for x, y, meta, aug, keyword in x_y_meta:
+        for x, y, meta, aug, keyword in tqdm(x_y_meta):
             meta_all.append(meta)
             # update for the new data format
             aug = ''.join([a[1] for a in aug])
@@ -861,13 +901,13 @@ def get_data(args, tokenizer, split_size):
         print("Using full data.")
         file_path = "../data_processed/"
         data_train = pickle.load(open(file_path+'train_ref', 'rb'))
-        gpt_train= GptDataset_full_condition(data_train, tokenizer, args=args)
+        gpt_train= GptDataset_full_condition(data_train[:], tokenizer, args=args)
 
         data_test = pickle.load(open(file_path+'test_ref', 'rb'))
-        gpt_test = GptDataset_full_condition(data_test, tokenizer, args=args)
+        gpt_test = GptDataset_full_condition(data_test[:], tokenizer, args=args)
 
         data_val = pickle.load(open(file_path+'test_ref', 'rb'))
-        gpt_val = GptDataset_full_condition(data_val, tokenizer, args=args)
+        gpt_val = GptDataset_full_condition(data_val[: ], tokenizer, args=args)
 
         # # ======= one-time plug in========
         # x_y_meta_pre = pickle.load(open("../data_processed/data_comet_dict",'rb'))

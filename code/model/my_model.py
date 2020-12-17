@@ -1,5 +1,7 @@
-import pytorch_transformers
-from pytorch_transformers import GPT2PreTrainedModel, GPT2Model, GPT2LMHeadModel,AdamW, WEIGHTS_NAME, CONFIG_NAME
+# import pytorch_transformers
+# from pytorch_transformers import GPT2PreTrainedModel, GPT2Model, GPT2LMHeadModel,AdamW, WEIGHTS_NAME, CONFIG_NAME
+import transformers
+from transformers import GPT2PreTrainedModel, GPT2Model, GPT2LMHeadModel,AdamW, WEIGHTS_NAME, CONFIG_NAME
 import torch
 import torch.nn as nn
 from torch.nn import CrossEntropyLoss
@@ -18,9 +20,9 @@ class GPT2ClassHeadsModel(GPT2PreTrainedModel):
 
 
     def forward(self, input_ids, labels=None, token_type_ids=None,
-                position_ids=None, past=None, head_mask=None):
+                position_ids=None, past_key_values=None, head_mask=None):
         transformer_outputs = self.transformer(input_ids, position_ids=position_ids, token_type_ids=token_type_ids,
-                                               past=past, head_mask=head_mask)
+                                               past_key_values=past_key_values, head_mask=head_mask)
         hidden_states = transformer_outputs[0] # torch.Size([1, 124, 1024])
         logits = self.classifier(hidden_states[:,-1,:]) # torch.Size([1,2])
         loss_fct = CrossEntropyLoss()

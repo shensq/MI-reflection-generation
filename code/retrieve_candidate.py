@@ -4,9 +4,8 @@
 # calculate score for every candidates
 # pick the one with highest score 
 # save the new input
-import sys
 
-sys.path.insert(0, '/home/shensq/LIT/pip_package')
+import sys
 import argparse
 import glob
 import re
@@ -14,8 +13,9 @@ import numpy as np
 from tqdm import tqdm
 import torch
 from utils import text_standardize
-from pytorch_transformers import GPT2Tokenizer
-from gpt_loader import GptDataset, collate_fn, collate_fn_nli, GptDataset_nli, SnliDataset
+# from pytorch_transformers import GPT2Tokenizer
+from transformers import GPT2Tokenizer
+from gpt_loader import GptDataset, collate_fn, GptDataset_nli, collate_fn_nli
 from torch.utils.data import Dataset, DataLoader
 from model import GPT2ClassHeadsModel
 import pickle
@@ -113,7 +113,6 @@ def get_tfidf(files, doc_utterances):
         tf_idf[:, i] = tf_idf[:, i] / np.linalg.norm(tf_idf[:, i])
     return tf_idf, tf, idf, word2index, index2word
 
-
 def get_sentence_tfidf(x, word2index, idf):
     x_concat = []  # tokens of k-utternaces
     for sen in x:
@@ -129,10 +128,9 @@ def get_sentence_tfidf(x, word2index, idf):
 
     return query_tfidf
 
-
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_dir", default='345M_Alex', type=str, required=False,
+    parser.add_argument("--model_dir", default='gpt2', type=str, required=False,
                         help="The directory of the model to be tuned.")
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--augment', action='store_true')
@@ -146,7 +144,7 @@ def main():
 
     filepath = '../data/datasetMI_real_standardized/annotations/'
     files = glob.glob(filepath + '[0-9m]*.txt')
-    file_index = dict([(f[48:],i) for i,f in enumerate(files)])
+    file_index = dict([(f[48:], i) for i, f in enumerate(files)])
     model_dir = '../models/' + args.model_dir
     model = GPT2ClassHeadsModel.from_pretrained(model_dir)
     # model = GPT2ClassHeadsModel.from_pretrained('gpt2')
@@ -157,10 +155,10 @@ def main():
     # tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
     print('Model loaded.')
 
-    pickle_handler = open('../data_processed/x_y_meta_all_new', 'rb')
+    pickle_handler = open('../data_processed/x_y_meta', 'rb')
     x_y_meta = pickle.load(pickle_handler)
     # gpt_data = GptDataset_nli(x_y_meta, tokenizer, augment=False, num_turns=10)
-    gpt_data = GptDataset_nli(x_y_meta, tokenizer, args, infer=True)
+    gpt_data = GptDataset_nli([["","",""]], tokenizer, args)
     
     doc_responses, doc_utterances = get_doc_utterance(files)
     tf_idf, tf, idf, word2index, index2word = get_tfidf(files, doc_utterances)
@@ -176,9 +174,10 @@ def main():
         response_candidates = doc_responses[top_k_idx]
 
         candidate_score = []
-        candidates = list(zip([x] * len(response_candidates), response_candidates, [0] * len(response_candidates), 
-            [""]* len(response_candidates), [""]* len(response_candidates)))
-        gpt_data.x_encoded, gpt_data.y_encoded, gpt_data.label,_,_ = gpt_data._split(candidates)
+        # candidates = list(zip([x] * len(response_candidates), response_candidates, [0] * len(response_candidates),
+        #     [""]* len(response_candidates), [""]* len(response_candidates)))
+        candidates = list(zip([x] * len(response_candidates), response_candidates, [0] * len(response_candidates)))
+        gpt_data.x_encoded, gpt_data.y_encoded, gpt_data.label = gpt_data._split(candidates)
         data_loader = DataLoader(dataset=gpt_data, batch_size=1, shuffle=False, drop_last=False,
                                  collate_fn=collate_fn_nli)
         for token_x, type_x, pos_x, lm_x, label in data_loader:
@@ -191,7 +190,7 @@ def main():
         if len(candidate_score) > 0:
             y_aug = response_candidates[np.argmax(candidate_score)]
             x_y_meta_aug.append([x, y, meta, y_aug])
-    with open('../data_processed/x_y_meta_aug_new', 'wb') as f:
+    with open('../data_processed/x_y_meta_aug', 'wb') as f:
         pickle.dump(x_y_meta_aug, f)
 
 

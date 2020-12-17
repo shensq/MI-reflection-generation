@@ -78,7 +78,7 @@ def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')
     return logits
 
 def sample_sequence(model, length, context, num_samples=1, temperature=1,
-                        top_k=0, top_p=0.0, device='cuda', attention_mask=None,args=None):
+                        top_k=0, top_p=0.0, device=None, attention_mask=None, args=None):
     context = torch.tensor(context, dtype=torch.long, device=device)
     context = context.unsqueeze(0).repeat(num_samples, 1)
     generated = context
@@ -96,10 +96,12 @@ def sample_sequence(model, length, context, num_samples=1, temperature=1,
 #             inputs = {'input_ids': generated, 'past': None, 'key_word': key_word, 'use_keyword':use_keyword}
             current_length = generated.shape[-1]
             if args.kbert:
-                inputs = {'input_ids': generated, 'past': None, 'attention_mask':output_attention_mask[:,:,:current_length,:current_length]}
+                inputs = {'input_ids': generated, 'past_key_values': None, 'attention_mask':output_attention_mask[:,:,:current_length,:current_length]}
             else:
-                inputs = {'input_ids': generated, 'past': None}
-            logits, past = model(**inputs)
+                inputs = {'input_ids': generated, 'past_key_values': None}
+            tmp = model(**inputs)
+            logits = tmp.logits
+            past = tmp.past_key_values
             next_token_logits = logits[0, -1, :] / (temperature if temperature>0 else 1.)
             filtered_logits = top_k_top_p_filtering(next_token_logits, top_k=top_k, top_p=top_p)
             # if top_k > 0 or top_p > 0.0: # greedy, top_p, top_k
@@ -120,7 +122,7 @@ def sample_sequence(model, length, context, num_samples=1, temperature=1,
 def load_model_data(args):
     #  === prepare data and model
     # ====== Load GPT2 model ========
-    model_dir = '../models/'+args.model_dir
+    model_dir = "../experiments/" +args.model_dir
     model = GPT2LMHeadModel.from_pretrained(model_dir)
     if USE_CUDA:
         model.cuda()
@@ -144,6 +146,7 @@ def load_model_data(args):
 
 def code_conditional_generation(args, sample, tokenizer):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = torch.device('cpu')
     x, type_x, pos_x, lm_x, x_len, attention_mask = sample
     input_len = x_len[0]  # The number of tokens of the context utterances
     context_tokens = x[0][:input_len + 1]  # at evaluation stage, the input is without the ground truth
@@ -170,6 +173,7 @@ def code_conditional_generation(args, sample, tokenizer):
 
 def run_model(args, model, tokenizer, test_loader):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cpu")
     model.eval()
 
     if args.length == -1:
@@ -284,7 +288,7 @@ if __name__ == '__main__':
 
     # Parse command line arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_dir', type=str, default='345M_Alex', help='pretrained model name or path to local checkpoint')
+    parser.add_argument('--model_dir', type=str, default='gpt2', help='pretrained model name or path to local checkpoint')
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--nsamples", type=int, default=1)
     parser.add_argument("--batch_size", type=int, default=-1)
